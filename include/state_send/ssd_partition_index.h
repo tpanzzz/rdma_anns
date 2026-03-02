@@ -227,13 +227,7 @@ private:
 
     std::atomic<uint64_t> number_own_states = 0;
     std::atomic<uint64_t> number_foreign_states = 0;
-    
-    /**
-       main loop that runs the search. This version balances all queries at
-       once, resulting in poor qps
-     */
-    void main_loop_balance_all();
-
+    virtual void process_state(SearchExecutionState s, SearchState<T, TagT> *state);
     /**
        main loop that runs the search. This version only balances batch_size queries at a
        time. 
@@ -250,6 +244,21 @@ private:
     void signal_stop();
     void join();
   };
+
+  // class OrchestrationThread: SearchThread {
+  //   void process_state(SearchExecutionState s,
+  //                      SearchState<T, TagT> *state) override;
+  // };
+
+  // class DistributedANN: SearchThread {
+  //   void process_state(SearchExecutionState s,
+  //                      SearchState<T, TagT> *state) override;
+  // };
+  
+
+  
+
+  
 
   moodycamel::ConcurrentQueue<SearchState<T, TagT> *> global_state_queue;
   
@@ -276,30 +285,37 @@ private:
 
     std::unordered_map<uint64_t,
                        std::unique_ptr<std::vector<SearchState<T, TagT> *>>>
-        msg_queue;
-    std::unordered_set<uint64_t> peer_client_ids;
+        state_queue;
+    std::unordered_map<uint64_t,
+                       std::unique_ptr<std::vector<SearchState<T, TagT> *>>>
+        result_queue;
     std::condition_variable msg_queue_cv;
     std::mutex msg_queue_mutex; // also manages is_peer_client
 
-    // used for the counterthread
     std::vector<uint64_t> get_num_msg_peers() {
       std::scoped_lock lock(msg_queue_mutex);
       std::vector<uint64_t> num_msg_peer;
       for (const auto &peer_id : parent->communicator->get_other_peer_ids()) {
         uint64_t num_msg = 0;
-        if (msg_queue.contains(peer_id)) {
-	  num_msg = msg_queue[peer_id]->size();
+        if (state_queue.contains(peer_id)) {
+	  num_msg = state_queue[peer_id]->size();
+        }
+        if (result_queue.contains(peer_id)) {
+          num_msg += result_queue[peer_id]->size();
         }
         num_msg_peer.push_back(num_msg);
       }
       return num_msg_peer;
     }
-    
+
+
+
+
     void main_loop();
     friend class CounterThread;
   public:
     BatchingThread(SSDPartitionIndex *parent);
-    void push_result_to_batch(SearchState<T, TagT> *state);
+    void push_client_result_to_batch(SearchState<T, TagT> *state);
     /**
        for state send, just send the state, for client gather, send result to
        client as well

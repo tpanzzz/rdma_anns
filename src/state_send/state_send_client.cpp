@@ -201,7 +201,7 @@ StateSendClient<T>::StateSendClient(
     const std::string &medoid_file)
     : my_id(id), dim(dim), dist_search_mode(dist_search_mode),
       prealloc_region_queue(Region::MAX_PRE_ALLOC_ELEMENTS, Region::reset),
-      prealloc_result_queue(search_result_t::MAX_PRE_ALLOC_ELEMENTS,
+      prealloc_result_queue(search_result_t::MAX_PRE_ALLOC_ELEMENTS * 2,
                             search_result_t::reset) {
   communicator = std::make_unique<ZMQP2PCommunicator>(my_id, address_list);
   // std::cout << "Done with constructor for statesendclient" << std::endl;
@@ -276,7 +276,10 @@ template <typename T> void StateSendClient<T>::start() {
 template <typename T>
 void StateSendClient<T>::wait_results(const uint64_t num_results) {
   while (num_results_received != num_results) {
-    // std::cout << num_results_received << std::endl;
+    LOG(INFO) << "waiting for results, num results received "
+              << num_results_received << ","
+              << "num prealloc results "
+    << prealloc_result_queue.get_approx_num_free();
     std::this_thread::sleep_for(std::chrono::seconds(1));
   }
 }

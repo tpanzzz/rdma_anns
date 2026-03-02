@@ -536,29 +536,11 @@ template <typename T, typename TagT>
 void SSDPartitionIndex<T, TagT>::notify_client_tcp(
     SearchState<T, TagT> *search_state) {
   if (use_batching) {
-    batching_thread->push_result_to_batch(search_state);
+    batching_thread->push_client_result_to_batch(search_state);
     return;
   }
   throw std::runtime_error(
       "Need to recheck implementation of non-batched sending");
-
-  // Region r;
-  // std::shared_ptr<search_result_t> result =
-  // search_state->get_search_result();
-  // // LOG(INFO) << "enable tags" << enable_tags;
-  // apply_tags_to_result(result);
-  // size_t region_size =
-  //     sizeof(MessageType::RESULT) + result->get_serialize_size();
-  // r.length = region_size;
-  // r.addr = new char[region_size];
-
-  // size_t offset = 0;
-  // MessageType msg_type = MessageType::RESULT;
-  // std::memcpy(r.addr, &msg_type, sizeof(msg_type));
-  // offset += sizeof(msg_type);
-  // result->write_serialize(r.addr + offset);
-  // this->communicator->send_to_peer(search_state->client_peer_id, r);
-  // delete search_state;
 }
 
 template <typename T, typename TagT>
@@ -813,20 +795,9 @@ void SSDPartitionIndex<T, TagT>::distributed_ann_receive_handler(
       preallocated_query_emb_queue.dequeue_exact(num_query_embs,
                                                  query_scratch.data());
     }
-
-    // SingletonLogger::get_logger().info("[{}] [{}] [{}]:BEGIN_DESERIALIZE",
-    // get_timestamp_ns(), msg_id,
-    // message_type_to_string(msg_type));
     distributedann::scoring_query_t<T>::deserialize_scoring_queries(
         buffer + offset, num_scoring_queries, num_query_embs,
         scoring_query_scratch.data(), query_scratch.data());
-    // SingletonLogger::get_logger().info("[{}] [{}] [{}]:END_DESERIALIZE",
-    // get_timestamp_ns(), msg_id,
-    // message_type_to_string(msg_type));
-
-    // SingletonLogger::get_logger().info("[{}] [{}]
-    // [{}]:BEGIN_QUERY_MAP_INSERT", get_timestamp_ns(), msg_id,
-    // message_type_to_string(msg_type));
     for (uint64_t i = 0; i < num_query_embs; i++) {
       if (query_emb_map.contains(query_scratch[i]->query_id)) {
         throw std::runtime_error(
@@ -975,7 +946,7 @@ void SSDPartitionIndex<T, TagT>::BatchingThread::signal_stop() {
   assert(!msg_queue.contains(std::numeric_limits<uint64_t>::max()));
   auto empty_vec = std::make_unique<std::vector<SearchState<T, TagT> *>>();
   empty_vec->push_back(nullptr);
-  msg_queue.emplace(std::numeric_limits<uint64_t>::max(), std::move(empty_vec));
+  state_queue.emplace(std::numeric_limits<uint64_t>::max(), std::move(empty_vec));
   // real_thread =
   // std::thread(&SSDPartitionIndex<T, TagT>::BatchingThread::main_loop, this);
   msg_queue_cv.notify_all();
@@ -988,21 +959,17 @@ void SSDPartitionIndex<T, TagT>::BatchingThread::join() {
 }
 
 template <typename T, typename TagT>
-void SSDPartitionIndex<T, TagT>::BatchingThread::push_result_to_batch(
+void SSDPartitionIndex<T, TagT>::BatchingThread::push_client_result_to_batch(
     SearchState<T, TagT> *state) {
   // LOG(INFO) << "push result called";
   std::unique_lock<std::mutex> lock(msg_queue_mutex);
   uint64_t recipient_peer_id = state->client_peer_id;
-
-  if (!peer_client_ids.contains(recipient_peer_id)) {
-    peer_client_ids.insert(recipient_peer_id);
-  }
-  if (!msg_queue.contains(recipient_peer_id)) {
-    msg_queue[recipient_peer_id] =
+  if (!result_queue.contains(recipient_peer_id)) {
+    result_queue[recipient_peer_id] =
         std::make_unique<std::vector<SearchState<T, TagT> *>>();
-    msg_queue[recipient_peer_id]->reserve(parent->max_batch_size);
+    result_queue[recipient_peer_id]->reserve(parent->max_batch_size);
   }
-  msg_queue[recipient_peer_id]->emplace_back(state);
+  result_queue[recipient_peer_id]->emplace_back(state);
   msg_queue_cv.notify_all();
 }
 
@@ -1012,32 +979,27 @@ void SSDPartitionIndex<T, TagT>::BatchingThread::push_state_to_batch(
   // LOG(INFO) << "push state to batch called";
   std::unique_lock<std::mutex> lock(msg_queue_mutex);
   uint64_t recipient_peer_id = parent->state_top_cand_random_partition(state);
-  state->should_send_emb =
-      parent->state_should_send_emb(state, recipient_peer_id);
   if (recipient_peer_id == parent->my_partition_id) {
     throw std::runtime_error(
         "if we are sending a state then its top cand partition id can't be "
         "from this server otherwise why send it");
   }
 
-  if (!msg_queue.contains(recipient_peer_id)) {
-    msg_queue[recipient_peer_id] =
+  if (!state_queue.contains(recipient_peer_id)) {
+    state_queue[recipient_peer_id] =
         std::make_unique<std::vector<SearchState<T, TagT> *>>();
-    msg_queue[recipient_peer_id]->reserve(parent->max_batch_size);
+    state_queue[recipient_peer_id]->reserve(parent->max_batch_size);
   }
-  msg_queue[recipient_peer_id]->emplace_back(state);
+  state_queue[recipient_peer_id]->emplace_back(state);
   if (parent->dist_search_mode ==
       DistributedSearchMode::STATE_SEND_CLIENT_GATHER) {
     // LOG(INFO) << "sending result as well as state";
-    if (!peer_client_ids.contains(state->client_peer_id)) {
-      peer_client_ids.insert(state->client_peer_id);
-    }
-    if (!msg_queue.contains(state->client_peer_id)) {
-      msg_queue[state->client_peer_id] =
+    if (!result_queue.contains(state->client_peer_id)) {
+      result_queue[state->client_peer_id] =
           std::make_unique<std::vector<SearchState<T, TagT> *>>();
-      msg_queue[state->client_peer_id]->reserve(parent->max_batch_size);
+      result_queue[state->client_peer_id]->reserve(parent->max_batch_size);
     }
-    msg_queue[state->client_peer_id]->emplace_back(state);
+    result_queue[state->client_peer_id]->emplace_back(state);
   }
   msg_queue_cv.notify_all();
 }
@@ -1047,10 +1009,14 @@ void SSDPartitionIndex<T, TagT>::BatchingThread::main_loop() {
   std::unique_lock<std::mutex> lock(msg_queue_mutex, std::defer_lock);
 
   auto msg_queue_empty = [this]() {
-    for (const auto &[peer_id, states] : this->msg_queue) {
+    for (const auto &[peer_id, states] : this->state_queue) {
       if (!states->empty())
         return false;
     }
+for (const auto &[peer_id, states] : this->result_queue) {
+      if (!states->empty())
+        return false;
+}
     return true;
   };
 
@@ -1063,7 +1029,7 @@ void SSDPartitionIndex<T, TagT>::BatchingThread::main_loop() {
     while (msg_queue_empty()) {
       msg_queue_cv.wait(lock);
     }
-    if (msg_queue.contains(std::numeric_limits<uint64_t>::max())) {
+    if (state_queue.contains(std::numeric_limits<uint64_t>::max())) {
       assert(!running);
       break;
     }
@@ -1079,16 +1045,18 @@ void SSDPartitionIndex<T, TagT>::BatchingThread::main_loop() {
                        std::unique_ptr<std::vector<SearchState<T, TagT> *>>>
         results_to_send;
 
-    for (auto &[peer_id, msgs] : msg_queue) {
-      if (peer_client_ids.contains(peer_id)) {
-        results_to_send[peer_id] = std::move(msgs);
-      } else {
-        states_to_send[peer_id] = std::move(msgs);
-      }
-      msg_queue[peer_id] =
+    for (auto &[peer_id, states] : state_queue) {
+      states_to_send[peer_id] = std::move(states);
+      state_queue[peer_id] =
           std::make_unique<std::vector<SearchState<T, TagT> *>>();
-      msg_queue[peer_id]->reserve(parent->max_batch_size);
+      state_queue[peer_id]->reserve(parent->max_batch_size);
     }
+    for (auto &[peer_id, states] : result_queue) {
+      results_to_send[peer_id] = std::move(states);
+      result_queue[peer_id] =
+          std::make_unique<std::vector<SearchState<T, TagT> *>>();
+      result_queue[peer_id]->reserve(parent->max_batch_size);
+    }    
     lock.unlock();
 
     for (auto &[client_peer_id, states] : results_to_send) {

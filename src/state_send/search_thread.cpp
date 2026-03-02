@@ -11,16 +11,14 @@ template <typename T, typename TagT>
 SSDPartitionIndex<T, TagT>::SearchThread::SearchThread(
     SSDPartitionIndex *parent, uint64_t thread_id)
     : parent(parent), thread_id(thread_id),
-    search_thread_consumer_token(parent->global_state_queue) {}
-
+      search_thread_consumer_token(parent->global_state_queue) {}
 
 template <typename T, typename TagT>
 void SSDPartitionIndex<T, TagT>::SearchThread::start() {
   running = true;
   real_thread = std::thread(
-			    &SSDPartitionIndex<T, TagT>::SearchThread::main_loop_batch, this);
+      &SSDPartitionIndex<T, TagT>::SearchThread::main_loop_batch, this);
 }
-
 
 template <typename T, typename TagT>
 void SSDPartitionIndex<T, TagT>::SearchThread::signal_stop() {
@@ -32,14 +30,52 @@ void SSDPartitionIndex<T, TagT>::SearchThread::signal_stop() {
   // need to free this after
   if (this->ctx == nullptr) {
     throw std::runtime_error(
-			     "tried stopping search threads but ctx is nullptr");
+        "tried stopping search threads but ctx is nullptr");
   }
   running = false;
   IORequest *noop_req = new IORequest;
   this->parent->reader->send_noop(noop_req, this->ctx);
 }
 
-
+template <typename T, typename TagT>
+void SSDPartitionIndex<T, TagT>::SearchThread::process_state(
+    SearchExecutionState s, SearchState<T, TagT> *state) {
+  if (s == SearchExecutionState::FINISHED) {
+    if (state->stats != nullptr) {
+      state->stats->total_us += (double)state->query_timer.elapsed();
+    }
+    state->query_timer.reset();
+    number_concurrent_queries--;
+    if (state->partition_history.size() == 1) {
+      number_own_states--;
+    } else {
+      number_foreign_states--;
+    }
+    this->parent->state_finalize_distance(state);
+    this->parent->notify_client(state);
+  } else if (s == SearchExecutionState::FRONTIER_ON_SERVER) {
+    // LOG(INFO) << "Issuing io";
+    state->io_timer.reset();
+    parent->state_issue_next_io_batch(state, ctx);
+  } else if (s == SearchExecutionState::FRONTIER_OFF_SERVER) {
+    if (state->partition_history.size() == 1) {
+      number_own_states--;
+    } else {
+      number_foreign_states--;
+    }
+    number_concurrent_queries--;
+    if (state->stats != nullptr) {
+      state->stats->total_us += state->query_timer.elapsed();
+    }
+    state->query_timer.reset();
+    uint64_t recipient_peer_id = parent->state_top_cand_random_partition(state);
+    state->should_send_emb =
+        parent->state_should_send_emb(state, recipient_peer_id);
+    parent->send_state(state);
+  } else {
+    throw std::runtime_error("SearchExecutionState is not handled currently");
+  }
+}
 
 template <typename T, typename TagT>
 void SSDPartitionIndex<T, TagT>::SearchThread::main_loop_batch() {
@@ -56,23 +92,25 @@ void SSDPartitionIndex<T, TagT>::SearchThread::main_loop_batch() {
   while (running) {
     // LOG(INFO) <<"Concurrent queries " <<number_concurrent_queries;
     assert(parent->num_queries_balance >= number_concurrent_queries);
-    uint64_t num_states_to_dequeue = parent->num_queries_balance - number_concurrent_queries;
-    // LOG(INFO) << "number of concurrent queries " << number_concurrent_queries;
+    uint64_t num_states_to_dequeue =
+        parent->num_queries_balance - number_concurrent_queries;
+    // LOG(INFO) << "number of concurrent queries " <<
+    // number_concurrent_queries;
     if (num_states_to_dequeue > 0) {
       // size_t num_dequeued = thread_state_queue.try_dequeue_bulk(
-							 // allocated_states.begin(), num_states_to_dequeue);
+      // allocated_states.begin(), num_states_to_dequeue);
       size_t num_dequeued = parent->global_state_queue.try_dequeue_bulk(
           search_thread_consumer_token, allocated_states.begin(),
-									num_states_to_dequeue);
+          num_states_to_dequeue);
       for (size_t i = 0; i < num_dequeued; i++) {
         if (allocated_states[i] == nullptr) {
           assert(running == false);
-          //poison pill from queue
+          // poison pill from queue
           break;
         }
         if (allocated_states[i]->query_emb == nullptr) {
           allocated_states[i]->query_emb =
-            parent->query_emb_map.find(allocated_states[i]->query_id);
+              parent->query_emb_map.find(allocated_states[i]->query_id);
         }
 
         // for (size_t j = 0; j < parent->data_dim; j++) {
@@ -92,7 +130,7 @@ void SSDPartitionIndex<T, TagT>::SearchThread::main_loop_batch() {
             uint64_t inherent_dim =
                 parent->metric == pipeann::Metric::INNER_PRODUCT
                     ? parent->data_dim - 1
-                : parent->data_dim;
+                    : parent->data_dim;
             if (unlikely(inherent_dim != allocated_states[i]->query_emb->dim)) {
               throw std::runtime_error("inherint dim diff from query dim");
             }
@@ -110,9 +148,9 @@ void SSDPartitionIndex<T, TagT>::SearchThread::main_loop_batch() {
             // query_norm = 1;
             for (size_t j = 0; j < inherent_dim; j++) {
               allocated_states[i]->query_emb->query[j] =
-                (T)(allocated_states[i]->query_emb->query[j] / query_norm);
+                  (T)(allocated_states[i]->query_emb->query[j] / query_norm);
             }
-            
+
             allocated_states[i]->query_emb->query_norm = query_norm;
           }
           allocated_states[i]->query_emb->normalized = true;
@@ -121,14 +159,16 @@ void SSDPartitionIndex<T, TagT>::SearchThread::main_loop_batch() {
           // LOG(INFO) << "NOT INITIALIZED YET";
           parent->pq_table.populate_chunk_distances_l2(
               allocated_states[i]->query_emb->query,
-						    allocated_states[i]->query_emb->pq_dists);
+              allocated_states[i]->query_emb->pq_dists);
           allocated_states[i]->query_emb->populated_pq_dists = true;
         }
-	// std::cout << "query_norm is " << allocated_states[i]->query_emb->query_norm << std::endl;
-        // for (size_t j = 0; j < parent->data_dim; j++) {
-	//   std::cout << std::fixed << std::setprecision(8)<< allocated_states[i]->query_emb->query[j] << " ";
+        // std::cout << "query_norm is " <<
+        // allocated_states[i]->query_emb->query_norm << std::endl; for (size_t
+        // j = 0; j < parent->data_dim; j++) {
+        //   std::cout << std::fixed << std::setprecision(8)<<
+        //   allocated_states[i]->query_emb->query[j] << " ";
         // }
-	// std::cout << std::endl;
+        // std::cout << std::endl;
         // if (allocated_states[i]->query_emb->query_norm == 0.0 && ) {
 
         // }
@@ -142,7 +182,7 @@ void SSDPartitionIndex<T, TagT>::SearchThread::main_loop_batch() {
           assert(allocated_states[i]->partition_history.size() == 1);
 
           allocated_states[i]->query_timer.reset();
-          // allocated_states[i]->io_timer.reset();          
+          // allocated_states[i]->io_timer.reset();
 
           if (allocated_states[i]->mem_l > 0) {
             assert(parent->mem_index_ != nullptr);
@@ -151,7 +191,7 @@ void SSDPartitionIndex<T, TagT>::SearchThread::main_loop_batch() {
             parent->mem_index_->search_with_tags(
                 allocated_states[i]->query_emb->query,
                 allocated_states[i]->mem_l, allocated_states[i]->mem_l,
-						 mem_tags.data(), mem_dists.data());
+                mem_tags.data(), mem_dists.data());
             parent->state_compute_and_add_to_retset(
                 allocated_states[i], mem_tags.data(),
                 std::min((unsigned)allocated_states[i]->mem_l,
@@ -159,7 +199,7 @@ void SSDPartitionIndex<T, TagT>::SearchThread::main_loop_batch() {
             // parent->state_print_detailed(allocated_states[i]);
             assert(allocated_states[i]->cur_list_size > 0);
           } else {
-	    uint32_t best_medoid = parent->medoids[0];
+            uint32_t best_medoid = parent->medoids[0];
             parent->state_compute_and_add_to_retset(allocated_states[i],
                                                     &best_medoid, 1);
             assert(allocated_states[i]->cur_list_size > 0);
@@ -167,13 +207,18 @@ void SSDPartitionIndex<T, TagT>::SearchThread::main_loop_batch() {
 
           // allocated_states[i]->query_timer.reset();
           UpdateFrontierValue ret_val =
-            parent->state_update_frontier(allocated_states[i]);
+              parent->state_update_frontier(allocated_states[i]);
           if (ret_val == UpdateFrontierValue::FRONTIER_EMPTY_ONLY_OFF_SERVER) {
             if (allocated_states[i]->stats) {
               allocated_states[i]->stats->total_us +=
-		allocated_states[i]->query_timer.elapsed();
+                  allocated_states[i]->query_timer.elapsed();
             }
             allocated_states[i]->query_timer.reset();
+            uint64_t recipient_peer_id =
+                parent->state_top_cand_random_partition(allocated_states[i]);
+            allocated_states[i]->should_send_emb =
+                parent->state_should_send_emb(allocated_states[i],
+                                              recipient_peer_id);
             parent->send_state(allocated_states[i]);
             // send state will delete the state later
             number_concurrent_queries--;
@@ -181,15 +226,17 @@ void SSDPartitionIndex<T, TagT>::SearchThread::main_loop_batch() {
           } else if (ret_val == UpdateFrontierValue::FRONTIER_HAS_ON_SERVER) {
             allocated_states[i]->io_timer.reset();
             parent->state_issue_next_io_batch(allocated_states[i], ctx);
-          } else if (ret_val == UpdateFrontierValue::FRONTIER_EMPTY_NO_OFF_SERVER){
+          } else if (ret_val ==
+                     UpdateFrontierValue::FRONTIER_EMPTY_NO_OFF_SERVER) {
             throw std::runtime_error(
                 "frontier can't be actually empty because we just added either "
                 "return value from mem index or medoid/node 0 to it");
           } else {
-	    throw std::runtime_error("werid return value from update frontier");
+            throw std::runtime_error("werid return value from update frontier");
           }
         } else {
-          // assert(parent->dist_search_mode == DistributedSearchMode::STATE_SEND);
+          // assert(parent->dist_search_mode ==
+          // DistributedSearchMode::STATE_SEND);
           number_concurrent_queries++;
           number_foreign_states++;
           parent->num_foreign_states_global_queue--;
@@ -214,7 +261,7 @@ void SSDPartitionIndex<T, TagT>::SearchThread::main_loop_batch() {
     }
 
     SearchState<T, TagT> *state =
-      reinterpret_cast<SearchState<T, TagT> *>(req->search_state);
+        reinterpret_cast<SearchState<T, TagT> *>(req->search_state);
 
     if (!parent->state_io_finished(state)) {
       continue;
@@ -231,48 +278,7 @@ void SSDPartitionIndex<T, TagT>::SearchThread::main_loop_batch() {
       s = parent->state_explore_frontier(state);
       // LOG(INFO) << "bruh";
     }
-    if (s == SearchExecutionState::FINISHED) {
-      if (state->stats != nullptr) {
-        state->stats->total_us += (double)state->query_timer.elapsed();
-      }
-      state->query_timer.reset();
-      number_concurrent_queries--;
-      if (state->partition_history.size() == 1) {
-        number_own_states--;
-      } else {
-	number_foreign_states--;
-      }
-      // LOG(INFO) << "DONE WITH QUERY " << state->query_emb->query_id;
-      // std::cout << "results " <<std::endl;
-      // for (size_t i = 0; i < state->k; i++) {
-	// std::cout << state->full_retset[i].id << " " << state->full_retset[i].distance << ",";
-	// }
-      
-      this->parent->state_finalize_distance(state);
-      // for (size_t i = 0; i < state->k_search; i++) {
-      //   std::cout << "(" << state->full_retset[i].id << " "
-      //   << state->full_retset[i].distance << "),";
-      // }
-      // std::cout << std::endl;
-      this->parent->notify_client(state);
-    } else if (s == SearchExecutionState::FRONTIER_ON_SERVER) {
-      // LOG(INFO) << "Issuing io";
-      state->io_timer.reset();
-      parent->state_issue_next_io_batch(state, ctx);
-    } else if (s == SearchExecutionState::FRONTIER_OFF_SERVER) {
-      if (state->partition_history.size() == 1) {
-        number_own_states--;
-      } else {
-	number_foreign_states--;
-      }
-      number_concurrent_queries--;
-      if (state->stats != nullptr) {
-        state->stats->total_us += state->query_timer.elapsed();
-      }
-      state->query_timer.reset();
-      // LOG(INFO) << "sending state";
-      parent->send_state(state);
-    }    
+    this->process_state(s, state);
   }
 }
 
@@ -282,7 +288,6 @@ void SSDPartitionIndex<T, TagT>::SearchThread::join() {
     real_thread.join();
   }
 }
-
 
 template class SSDPartitionIndex<float>::SearchThread;
 template class SSDPartitionIndex<uint8_t>::SearchThread;
