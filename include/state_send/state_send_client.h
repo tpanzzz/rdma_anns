@@ -73,70 +73,6 @@ private:
 private:
   moodycamel::BlockingConcurrentQueue<std::shared_ptr<QueryEmbedding<T>>>
       concurrent_query_queue;
-
-private:
-  /**
-     for distributedann comparison
-   */
-  uint8_t num_partitions;
-  std::vector<std::vector<uint8_t>> partition_assignment;
-  uint8_t get_random_partition_assignment(uint32_t node_id) {
-    static thread_local std::random_device dev;
-    static thread_local std::mt19937 gen(dev());
-
-    std::uniform_int_distribution<uint8_t> distrib(
-						   0, partition_assignment[node_id].size() - 1);
-    return partition_assignment[node_id][distrib(gen)];
-  }
-  
-  
-  class OrchestrationThread {
-  private:
-    std::thread real_thread;
-    StateSendClient *parent;
-    std::atomic<bool> running{false};
-    moodycamel::ConsumerToken ctok;
-
-    /**
-       using the state's frontier, send data
-     */
-    size_t
-    send_scoring_queries(const distributedann::DistributedANNState<T> *state,
-                         const std::shared_ptr<QueryEmbedding<T>> &query,
-                         float threshold,
-                         std::vector<uint8_t> &partitions_with_emb);
-    
-    void
-    search_query(std::shared_ptr<QueryEmbedding<T>> query, search_result_t* result);
-    void main_loop();
-  public:
-    OrchestrationThread(StateSendClient *parent);
-    void start();
-    void signal_stop();
-    void join();
-  };
-
-  uint32_t num_orchestration_threads;
-  std::vector<std::unique_ptr<OrchestrationThread>> orchestration_threads;
-
-
-  // number of states = number of orchestration threads since 1 thread will work
-  // on a query at a time
-  PreallocatedQueue<distributedann::DistributedANNState<T>> prealloc_states;
-
-  // used to avoid dynamically allocating result when recived message from
-  // handler
-  PreallocatedQueue<distributedann::result_t<T>> prealloc_result;
-
-
-  /*
-    used to store the pointers in handler
-   */
-  std::array<distributedann::result_t<T> *, MAX_ELEMENTS_HANDLER_CLIENT>
-      handler_result_scratch;
-public:
-  void distributed_ann_receive_handler(const char *buffer, size_t size);
-    
 private:
   class ResultReceiveThread {
   private:
@@ -175,6 +111,7 @@ private:
   moodycamel::BlockingConcurrentQueue<search_result_t *> result_queue;
 
 private:
+  size_t num_partitions;
   size_t dim;
   T *partition_medoids;
   pipeann::Distance<T> *distance_fn; 
@@ -184,7 +121,7 @@ public:
                   const std::vector<std::string> &address_list,
                   int num_worker_threads,
                   DistributedSearchMode dist_search_mode, uint64_t dim,
-                  const std::string &partition_assignment_file, uint32_t top_n,
+                  uint32_t top_n,
                   const std::string &medoid_file);
   PreallocatedQueue<search_result_t> prealloc_result_queue;
   PreallocatedQueue<Region> prealloc_region_queue;

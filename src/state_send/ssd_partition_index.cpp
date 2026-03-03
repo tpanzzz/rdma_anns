@@ -25,36 +25,12 @@ SSDPartitionIndex<T, TagT>::SSDPartitionIndex(
     : reader(fileReader), communicator(communicator),
       client_state_prod_token(global_state_queue),
       server_state_prod_token(global_state_queue),
-      distributed_ann_head_index_ptok(distributed_ann_task_queue),
-      distributed_ann_scoring_ptok(distributed_ann_task_queue),
       dist_search_mode(dist_search_mode), max_batch_size(max_batch_size),
       use_batching(use_batching), use_counter_thread(use_counter_thread),
       pq_table(m), metric(m) {
 
   if (dist_search_mode == DistributedSearchMode::DISTRIBUTED_ANN) {
-    prealloc_distributedann_result =
-        PreallocatedQueue<distributedann::result_t<T>>(
-            MAX_PRE_ALLOC_ELEMENTS, distributedann::result_t<T>::reset);
-    prealloc_distributedann_scoring_query =
-        PreallocatedQueue<distributedann::scoring_query_t<T>>(
-            MAX_PRE_ALLOC_ELEMENTS, distributedann::scoring_query_t<T>::reset);
-    preallocated_query_emb_queue = PreallocatedQueue<QueryEmbedding<T>>(
-        MAX_PRE_ALLOC_ELEMENTS, QueryEmbedding<T>::reset);
-
-    LOG(INFO) << "Allocated "
-              << prealloc_distributedann_result.get_num_elements() *
-                     sizeof(distributedann::result_t<T>)
-              << " bytes for distributedann results";
-
-    LOG(INFO) << "Allocated "
-              << prealloc_distributedann_scoring_query.get_num_elements() *
-                     sizeof(distributedann::scoring_query_t<T>)
-              << " bytes for distributedann scoring query";
-
-    LOG(INFO) << "Allocated "
-              << preallocated_query_emb_queue.get_num_elements() *
-                     sizeof(QueryEmbedding<T>)
-              << " bytes for queries";
+    throw std::invalid_argument("DistributedANN not yet supported");
   } else {
     preallocated_state_queue = PreallocatedQueue<SearchState<T, TagT>>(
         MAX_PRE_ALLOC_ELEMENTS, SearchState<T, TagT>::reset);
@@ -142,15 +118,7 @@ SSDPartitionIndex<T, TagT>::SSDPartitionIndex(
   }
 
   if (dist_search_mode == DistributedSearchMode::DISTRIBUTED_ANN) {
-    for (uint64_t thread_id = 0; thread_id < num_worker_threads; thread_id++) {
-      distributedann_worker_threads.emplace_back(
-          std::make_unique<DistributedANNWorkerThread>(this));
-    }
-    if (use_batching == false) {
-      throw std::invalid_argument("For distributedann, has to use batching");
-    }
-    distributedann_batching_thread =
-        std::make_unique<DistributedANNBatchingThread>(this);
+    throw std::invalid_argument("DistributedANN not yet supported");
   } else {
     LOG(INFO) << "starting threads " << num_worker_threads;
     for (uint64_t thread_id = 0; thread_id < num_worker_threads; thread_id++) {
@@ -463,11 +431,7 @@ void SSDPartitionIndex<T, TagT>::apply_tags_to_result(uint32_t *node_id,
 
 template <typename T, typename TagT> void SSDPartitionIndex<T, TagT>::start() {
   if (dist_search_mode == DistributedSearchMode::DISTRIBUTED_ANN) {
-    for (uint64_t thread_id = 0; thread_id < num_worker_threads; thread_id++) {
-      distributedann_worker_threads[thread_id]->start();
-      LOG(INFO) << "STARTED THREAD " << thread_id;
-    }
-    distributedann_batching_thread->start();
+    throw std::invalid_argument("DistributedANN not yet supported");
   } else {
     for (uint64_t thread_id = 0; thread_id < num_worker_threads; thread_id++) {
       search_threads[thread_id]->start();
@@ -485,14 +449,7 @@ template <typename T, typename TagT>
 void SSDPartitionIndex<T, TagT>::shutdown() {
   LOG(INFO) << "SHUTDOWN CALLED";
   if (dist_search_mode == DistributedSearchMode::DISTRIBUTED_ANN) {
-    for (uint64_t thread_id = 0; thread_id < num_worker_threads; thread_id++) {
-      distributedann_worker_threads[thread_id]->signal_stop();
-    }
-    for (uint64_t thread_id = 0; thread_id < num_worker_threads; thread_id++) {
-      distributedann_worker_threads[thread_id]->join();
-    }
-    distributedann_batching_thread->signal_stop();
-    distributedann_batching_thread->join();
+    throw std::invalid_argument("DistributedANN not yet supported");
   } else {
     for (uint64_t thread_id = 0; thread_id < num_worker_threads; thread_id++) {
       search_threads[thread_id]->signal_stop();
@@ -724,137 +681,6 @@ void SSDPartitionIndex<T, TagT>::receive_handler(const char *buffer,
                                      message_type_to_string(msg_type));
 }
 
-template <typename T, typename TagT>
-void SSDPartitionIndex<T, TagT>::distributed_ann_receive_handler(
-    const char *buffer, size_t size) {
-  uint64_t msg_id = msg_received_id.fetch_add(1);
-  MessageType msg_type;
-  size_t offset = 0;
-  std::memcpy(&msg_type, buffer, sizeof(msg_type));
-  offset += sizeof(msg_type);
-  SingletonLogger::get_logger().info("[{}] [{}] [{}]:BEGIN_HANDLER",
-                                     get_timestamp_ns(), msg_id,
-                                     message_type_to_string(msg_type));
-
-  SingletonLogger::get_logger().info("[{}] [{}] [{}]:MSG_SIZE {}",
-                                     get_timestamp_ns(), msg_id,
-                                     message_type_to_string(msg_type), size);
-
-  if (msg_type == MessageType::QUERIES) {
-    // LOG(INFO) << " RECEIVED HEAD INDEX QUERY";
-    size_t num_queries;
-    std::memcpy(&num_queries, buffer + offset, sizeof(num_queries));
-    offset += sizeof(num_queries);
-    preallocated_query_emb_queue.dequeue_exact(num_queries,
-                                               query_scratch.data());
-
-    // SingletonLogger::get_logger().info("[{}] [{}] [{}]:BEGIN_DESERIALIZE",
-    // get_timestamp_ns(), msg_id, message_type_to_string(msg_type));
-    QueryEmbedding<T>::deserialize_queries(buffer + offset, num_queries,
-                                           query_scratch.data());
-    // SingletonLogger::get_logger().info("[{}] [{}] [{}]:END_DESERIALIZE",
-    // get_timestamp_ns(), msg_id,
-    // message_type_to_string(msg_type));
-
-    for (uint64_t i = 0; i < num_queries; i++) {
-      QueryEmbedding<T> *query = query_scratch[i];
-      // std::cout << "received new query "<< query->query_id << std::endl;
-      // assert(query->dim == this->dim);
-      query->num_chunks = this->n_chunks;
-      // lets check how long this takes, if it takes long then we can do it
-      // lazily (ie when the search thread first accesses it
-      // SingletonLogger::get_logger().info("[{}] [{}]
-      // [{}]:BEGIN_QUERY_MAP_INSERT", get_timestamp_ns(), msg_id,
-      // message_type_to_string(msg_type));
-      query_emb_map.insert_or_assign(query->query_id, query);
-      // SingletonLogger::get_logger().info("[{}] [{}]
-      // [{}]:END_QUERY_MAP_INSERT", get_timestamp_ns(), msg_id,
-      // message_type_to_string(msg_type));
-      // SingletonLogger::get_logger().info("[{}] [{}] [{}]:BEGIN_CREATE_STATE",
-      // get_timestamp_ns(), msg_id,
-      // message_type_to_string(msg_type));
-      distributed_ann_task_scratch[i] = {
-          distributedann::DistributedANNTaskType::HEAD_INDEX, query};
-    }
-
-    distributed_ann_task_queue.enqueue_bulk(distributed_ann_head_index_ptok,
-                                            distributed_ann_task_scratch.data(),
-                                            num_queries);
-
-  } else if (msg_type == MessageType::SCORING_QUERIES) {
-    // LOG(INFO) << " RECEIVED SCORING QUERY QUERY";
-    size_t num_scoring_queries, num_query_embs;
-    std::memcpy(&num_scoring_queries, buffer + offset,
-                sizeof(num_scoring_queries));
-    offset += sizeof(num_scoring_queries);
-    std::memcpy(&num_query_embs, buffer + offset, sizeof(num_query_embs));
-    offset += sizeof(num_query_embs);
-    prealloc_distributedann_scoring_query.dequeue_exact(
-        num_scoring_queries, scoring_query_scratch.data());
-    if (num_query_embs > 0) {
-      preallocated_query_emb_queue.dequeue_exact(num_query_embs,
-                                                 query_scratch.data());
-    }
-    distributedann::scoring_query_t<T>::deserialize_scoring_queries(
-        buffer + offset, num_scoring_queries, num_query_embs,
-        scoring_query_scratch.data(), query_scratch.data());
-    for (uint64_t i = 0; i < num_query_embs; i++) {
-      if (query_emb_map.contains(query_scratch[i]->query_id)) {
-        throw std::runtime_error(
-            "Query emb map already contains embedding for query id " +
-            std::to_string(query_scratch[i]->query_id));
-      }
-      query_emb_map.insert_or_assign(query_scratch[i]->query_id,
-                                     query_scratch[i]);
-    }
-    // SingletonLogger::get_logger().info("[{}] [{}] [{}]:END_QUERY_MAP_INSERT",
-    // get_timestamp_ns(), msg_id,
-    // message_type_to_string(msg_type));
-
-    // SingletonLogger::get_logger().info(
-    // "[{}] [{}] [{}]:BEGIN_ENQUEUE_SCORING_QUERY", get_timestamp_ns(),
-    // msg_id, message_type_to_string(msg_type));
-
-    for (auto i = 0; i < num_scoring_queries; i++) {
-      distributed_ann_task_scratch[i] = {
-          distributedann::DistributedANNTaskType::SCORING_QUERY,
-          scoring_query_scratch[i]};
-    }
-    distributed_ann_task_queue.enqueue_bulk(distributed_ann_scoring_ptok,
-                                            distributed_ann_task_scratch.data(),
-                                            num_scoring_queries);
-    // SingletonLogger::get_logger().info("[{}] [{}]
-    // [{}]:END_ENQUEUE_SCORING_QUERY", get_timestamp_ns(), msg_id,
-    // message_type_to_string(msg_type));
-  } else if (msg_type == MessageType::RESULT_ACK) {
-    // SingletonLogger::get_logger().info("[{}] [{}] [{}]:NUM_MSG {}",
-    // get_timestamp_ns(), msg_id, message_type_to_string(msg_type), 1);
-    // LOG(INFO) << "ack received";
-    // SingletonLogger::get_logger().info("[{}] [{}] [{}]:BEGIN_DESERIALIZE",
-    // get_timestamp_ns(), msg_id, message_type_to_string(msg_type));
-    // ack a = ack::deserialize(buffer + offset);
-    uint64_t query_id;
-    std::memcpy(&query_id, buffer + offset, sizeof(query_id));
-    // SingletonLogger::get_logger().info("[{}] [{}] [{}]:END_DESERIALIZE",
-    // get_timestamp_ns(), msg_id, message_type_to_string(msg_type));
-    // SingletonLogger::get_logger().info("[{}] [{}]
-    // [{}]:BEGIN_QUERY_MAP_ERASE", get_timestamp_ns(), msg_id,
-    // message_type_to_string(msg_type));
-    QueryEmbedding<T> *query = query_emb_map.find(query_id);
-    preallocated_query_emb_queue.free(query);
-
-    query_emb_map.erase(query_id);
-    // SingletonLogger::get_logger().info("[{}] [{}] [{}]:END_QUERY_MAP_ERASE",
-    // get_timestamp_ns(), msg_id,
-    // message_type_to_string(msg_type));
-  } else {
-    throw std::runtime_error("Weird msg_type value " +
-                             message_type_to_string(msg_type));
-  }
-  SingletonLogger::get_logger().info("[{}] [{}] [{}]:END_HANDLER",
-                                     get_timestamp_ns(), msg_id,
-                                     message_type_to_string(msg_type));
-}
 
 template <typename T, typename TagT>
 void SSDPartitionIndex<T, TagT>::send_state(

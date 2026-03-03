@@ -59,11 +59,12 @@ public:
           m, ssd_partition_index->get_data_dim(), mem_index_path);
     }
     if (dist_search_mode == DistributedSearchMode::DISTRIBUTED_ANN) {
-      communicator->register_receive_handler(
-          [index_ptr = (ssd_partition_index.get())](const char *buffer,
-                                                    size_t size) {
-            index_ptr->distributed_ann_receive_handler(buffer, size);
-          });      
+      throw std::invalid_argument("DistributedANN not yet supported");
+      // communicator->register_receive_handler(
+      //     [index_ptr = (ssd_partition_index.get())](const char *buffer,
+      //                                               size_t size) {
+      //       index_ptr->distributed_ann_receive_handler(buffer, size);
+      //     });      
     }else {
       communicator->register_receive_handler(
           [index_ptr = (ssd_partition_index.get())](const char *buffer,
@@ -207,6 +208,10 @@ int main(int argc, char **argv) {
   }
 
   dist_search_mode = get_distributed_search_mode(dist_search_mode_str);
+
+  if (dist_search_mode == DistributedSearchMode::DISTRIBUTED_ANN) {
+    throw std::runtime_error("Distributedann yet to be implemented");
+  }
 
   if (dist_search_mode != DistributedSearchMode::SINGLE_SERVER) {
     index_path_prefix += std::to_string(server_peer_id);

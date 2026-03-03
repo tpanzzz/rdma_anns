@@ -88,6 +88,7 @@ int search_disk_index(uint64_t num_client_thread, uint64_t dim,
   // }
 
   if (dist_search_mode == DistributedSearchMode::DISTRIBUTED_ANN) {
+    throw std::invalid_argument("DistributedANN yet to be supported");
     if (beam_width > distributedann::MAX_BEAM_WIDTH_DISTRIBUTED_ANN) {
       throw std::invalid_argument("beam width too large for distributedann");
     }
@@ -115,7 +116,7 @@ int search_disk_index(uint64_t num_client_thread, uint64_t dim,
   std::vector<std::vector<float>> query_result_dists(Lvec.size());
 
   StateSendClient<T> client(client_peer_id, address_list, num_client_thread,
-                            dist_search_mode, dim, partition_assignment_file,
+                            dist_search_mode, dim,
                             top_n, medoid_file);
   // client.start_result_thread();
   // client.start_client_threads();
