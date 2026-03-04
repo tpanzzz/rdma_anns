@@ -163,22 +163,13 @@ else
     PEER_IPS+=("$OCT1.$OCT2.$OCT3.$((OCT4+NUM_SERVERS-1)):$((BASE_PORT+1))")
 fi
 
+
+
 # --- CloudLab external hostnames for SSH from laptop ---
 if [[ "$MODE" == "distributed" ]]; then
-    # Full list of available CloudLab hosts
-    ALL_CLOUDLAB_HOSTS=(
-        "namanh@er039.utah.cloudlab.us"
-	"namanh@er082.utah.cloudlab.us"
-	"namanh@er076.utah.cloudlab.us"
-	"namanh@er050.utah.cloudlab.us"
-	"namanh@er104.utah.cloudlab.us" 
-	"namanh@er124.utah.cloudlab.us"
-	"namanh@er001.utah.cloudlab.us"
-	"namanh@er040.utah.cloudlab.us"
-	"namanh@er032.utah.cloudlab.us"
-	"namanh@er126.utah.cloudlab.us"					
-    )
-    
+    SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+    source ${SCRIPT_DIR}/cloudlab_addresses.sh
+
     # Only take NUM_SERVERS + 1 hosts (servers + client)
     NEEDED_HOSTS=$((NUM_SERVERS))
     
