@@ -158,7 +158,9 @@ for i in $(seq 0 $((NUM_SERVERS - 1))); do
     --counter_csv=$COUNTER_CSV \
     --counter_sleep_ms=$COUNTER_SLEEP_MS \
     --use_logging=$USE_LOGGING \
-    --log_file=$LOG_FILE"
+    --log_file=$LOG_FILE \
+    --num_orchestration_threads=$NUM_ORCHESTRATION_THREADS \
+    --num_scoring_threads=$NUM_SCORING_THREADS"
   echo ${SERVER_CMD}
   
   # Launch server via SSH
@@ -220,7 +222,6 @@ CLIENT_CMD="$WORKDIR/build/benchmark/state_send/run_benchmark_state_send_tcp \
   --address_list $ADDRESS_LIST_STR \
   --data_type=$DATA_TYPE \
   --result_output_folder=$REMOTE_LOG_DIR \
-  --partition_assignment_file=${DISTRIBUTEDANN_CLIENT_PARTITION_ASSIGNMENT_FILE} \
   --write_query_csv=${WRITE_QUERY_CSV} \
   --top_n=$TOP_N \
   --medoid_file=$MEDOID_FILE"

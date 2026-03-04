@@ -9,11 +9,10 @@
 #include <nlohmann/json.hpp>
 #include <stdexcept>
 
-void write_results_csv(
-    const std::vector<search_result_t*> &results,
-    const std::vector<double> &send_timestamp,
-    const std::vector<double> &receive_timestamp,
-    const std::string &output_file) {
+void write_results_csv(const std::vector<search_result_t *> &results,
+                       const std::vector<double> &send_timestamp,
+                       const std::vector<double> &receive_timestamp,
+                       const std::string &output_file) {
   std::ofstream output(output_file);
   output << std::setprecision(15);
   auto partition_history_to_str = [](search_result_t *result) {
@@ -67,9 +66,8 @@ int search_disk_index(uint64_t num_client_thread, uint64_t dim,
                       std::string dist_search_mode_str, uint64_t client_peer_id,
                       uint64_t send_rate_per_second,
                       const std::vector<std::string> &address_list,
-                      const std::string &result_output_folder,
-                      const std::string &partition_assignment_file,
-                      uint32_t top_n, const std::string &medoid_file) {
+                      const std::string &result_output_folder, uint32_t top_n,
+                      const std::string &medoid_file) {
 
   uint64_t microsecond_sleep_time = 0;
   if (send_rate_per_second != 0) {
@@ -116,8 +114,7 @@ int search_disk_index(uint64_t num_client_thread, uint64_t dim,
   std::vector<std::vector<float>> query_result_dists(Lvec.size());
 
   StateSendClient<T> client(client_peer_id, address_list, num_client_thread,
-                            dist_search_mode, dim,
-                            top_n, medoid_file);
+                            dist_search_mode, dim, top_n, medoid_file);
   // client.start_result_thread();
   // client.start_client_threads();
   client.start();
@@ -178,7 +175,7 @@ int search_disk_index(uint64_t num_client_thread, uint64_t dim,
     client.wait_results(num_queries_to_send);
     // LOG(INFO) << "Done waiting for results";
 
-    std::vector<search_result_t*> results;
+    std::vector<search_result_t *> results;
     std::vector<double> e2e_latencies;
     std::vector<double> send_timestamp;
     std::vector<double> receive_timestamp;
@@ -359,7 +356,6 @@ int main(int argc, char **argv) {
   uint64_t send_rate_per_second;
   std::vector<std::string> address_list;
   std::string result_output_folder;
-  std::string partition_assignment_file;
   uint32_t top_n;
 
   // required for SCATTER_GATHER_TOP_N
@@ -398,13 +394,9 @@ int main(int argc, char **argv) {
       "data type")("result_output_folder",
                    po::value<std::string>(&result_output_folder)->required(),
                    "path to save result csv")(
-      "partition_assignment_file",
-      po::value<std::string>(&partition_assignment_file)->default_value(""),
-      "path to partition_assignment_file for distributedann orchestration "
-      "service")("write_query_csv",
-                 po::value<bool>(&write_query_csv)->required(),
-                 "if true then writes information about every single query for "
-                 "each L value into a csv file.")(
+      "write_query_csv", po::value<bool>(&write_query_csv)->required(),
+      "if true then writes information about every single query for "
+      "each L value into a csv file.")(
       "top_n",
       po::value<uint32_t>(&top_n)->default_value(
           std::numeric_limits<uint32_t>::max()),
@@ -419,12 +411,6 @@ int main(int argc, char **argv) {
   }
   po::notify(vm);
 
-  if (dist_search_mode_str == "DISTRIBUTED_ANN" &&
-      !file_exists(partition_assignment_file)) {
-    throw std::invalid_argument(
-        "partition_assignment_file has to exist if mode is distributed ann: " +
-        partition_assignment_file);
-  }
   if (beam_width > BALANCE_BATCH_MAX_BEAMWIDTH) {
     LOG(ERROR) << "Beam width can't be larger than "
                << BALANCE_BATCH_MAX_BEAMWIDTH;
@@ -436,23 +422,20 @@ int main(int argc, char **argv) {
         num_client_thread, dim, query_bin, truthset_bin, num_queries_to_send,
         Lvec, beam_width, K, mem_L, record_stats, write_query_csv,
         dist_search_mode_str, client_peer_id, send_rate_per_second,
-        address_list, result_output_folder, partition_assignment_file, top_n,
-        medoid_file);
+        address_list, result_output_folder, top_n, medoid_file);
   } else if (data_type == "int8") {
     search_disk_index<int8_t>(
         num_client_thread, dim, query_bin, truthset_bin, num_queries_to_send,
         Lvec, beam_width, K, mem_L, record_stats, write_query_csv,
         dist_search_mode_str, client_peer_id, send_rate_per_second,
-        address_list, result_output_folder, partition_assignment_file, top_n,
-        medoid_file);
+        address_list, result_output_folder, top_n, medoid_file);
 
   } else if (data_type == "float") {
     search_disk_index<float>(
         num_client_thread, dim, query_bin, truthset_bin, num_queries_to_send,
         Lvec, beam_width, K, mem_L, record_stats, write_query_csv,
         dist_search_mode_str, client_peer_id, send_rate_per_second,
-        address_list, result_output_folder, partition_assignment_file, top_n,
-        medoid_file);
+        address_list, result_output_folder, top_n, medoid_file);
   } else {
     throw std::invalid_argument(
         "data type in json file is not uint8, int8, float " + data_type);

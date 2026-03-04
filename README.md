@@ -8,7 +8,7 @@ By convention, this repo should be placed in `$HOME/workspace/rdma_anns`
 First, we need to build the gp-ann repo. Navigate to `extern/gp-ann`
 - by default its l2: `cmake -S. -Bbuild_l2`
 - to use mips, need to include `-DMIPS_DISTANCE=ON` when building: `cmake -S. -Bbuild_mips -DMIPS_DISTANCE=ON`
-then do `cmake --build build -j`
+then do `cmake --build build_{mips/l2} -j`
 
 Then you can partition with the script in `scripts/index_creation/parition.sh`, then you can convert it to the format that is used with `src/state_send/convert_partition_txt_to_bin.cpp`
 	
@@ -284,6 +284,22 @@ cmake --build build -j
 - DISK\_KV: Should be the same idea as the above (currently only works for 1 cluster tho) but the vector embedding and neighbor ids are stored on cascade persistent kvstore instead of on file.
 - TEST\_COMPUTE\_PIPELINE: with this enabled, when the distance compute thread receives the compute query, it won't do any computation/read, just return with blank compute result
 
+# Build Indices
+```
+# state send
+./scripts/index_creation/create_state_send_index.sh uint8 l2 /mydata/local/anngraphs/bigann/100M/global_partitions_5/pipeann_100M_partition0 /mydata/local/anngraphs/bigann/100M/global_partitions_5/pipeann_100M_partition0_ids_uint32.bin /mydata/local/anngraphs/bigann/100M/global_partitions_5/pipeann_100M_partition0.bin /mydata/local/anngraphs/bigann/100M/global_partitions_5/pipeann_100M_partition0_graph  /mydata/local/anngraphs/bigann/100M/global_partitions_5/pipeann_100M_partition_assignment.bin /mydata/local/anngraphs/bigann/100M/pipeann_100M
+
+./scripts/index_creation/create_state_send_index.sh uint8 l2 /mydata/local/anngraphs/bigann/100M/global_partitions_5/pipeann_100M_partition1 /mydata/local/anngraphs/bigann/100M/global_partitions_5/pipeann_100M_partition1_ids_uint32.bin /mydata/local/anngraphs/bigann/100M/global_partitions_5/pipeann_100M_partition1.bin /mydata/local/anngraphs/bigann/100M/global_partitions_5/pipeann_100M_partition1_graph  /mydata/local/anngraphs/bigann/100M/global_partitions_5/pipeann_100M_partition_assignment.bin /mydata/local/anngraphs/bigann/100M/pipeann_100M
+
+./scripts/index_creation/create_state_send_index.sh uint8 l2 /mydata/local/anngraphs/bigann/100M/global_partitions_5/pipeann_100M_partition2 /mydata/local/anngraphs/bigann/100M/global_partitions_5/pipeann_100M_partition2_ids_uint32.bin /mydata/local/anngraphs/bigann/100M/global_partitions_5/pipeann_100M_partition2.bin /mydata/local/anngraphs/bigann/100M/global_partitions_5/pipeann_100M_partition2_graph  /mydata/local/anngraphs/bigann/100M/global_partitions_5/pipeann_100M_partition_assignment.bin /mydata/local/anngraphs/bigann/100M/pipeann_100M
+
+./scripts/index_creation/create_state_send_index.sh uint8 l2 /mydata/local/anngraphs/bigann/100M/global_partitions_5/pipeann_100M_partition3 /mydata/local/anngraphs/bigann/100M/global_partitions_5/pipeann_100M_partition3_ids_uint32.bin /mydata/local/anngraphs/bigann/100M/global_partitions_5/pipeann_100M_partition3.bin /mydata/local/anngraphs/bigann/100M/global_partitions_5/pipeann_100M_partition3_graph  /mydata/local/anngraphs/bigann/100M/global_partitions_5/pipeann_100M_partition_assignment.bin /mydata/local/anngraphs/bigann/100M/pipeann_100M
+
+./scripts/index_creation/create_state_send_index.sh uint8 l2 /mydata/local/anngraphs/bigann/100M/global_partitions_5/pipeann_100M_partition4 /mydata/local/anngraphs/bigann/100M/global_partitions_5/pipeann_100M_partition4_ids_uint32.bin /mydata/local/anngraphs/bigann/100M/global_partitions_5/pipeann_100M_partition4.bin /mydata/local/anngraphs/bigann/100M/global_partitions_5/pipeann_100M_partition4_graph  /mydata/local/anngraphs/bigann/100M/global_partitions_5/pipeann_100M_partition_assignment.bin /mydata/local/anngraphs/bigann/100M/pipeann_100M
+
+
+
+```
 # DATASET info
 - bigann: l2, 128, uint8
 - msspacev: l2, 100, int8

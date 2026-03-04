@@ -422,11 +422,11 @@ ls -la /nfs
 #+BEGIN_SRC
 sudo mkdir /mydata
 sudo /usr/local/etc/emulab/mkextrafs.pl -f /mydata
-sudo chown -R namanh:parlayann-PG0 /mydata
-mkdir -p /mydata/local/anngraphs/bigann/100M
-mkdir -p /mydata/local/anngraphs/bigann/1B
-mkdir -p /mydata/local/anngraphs/deep1b/100M
-mkdir -p /mydata/local/anngraphs/deep1b/1B
+sudo chown -R namanh:ece6960-sp26-PG0 /mydata
+sudo mkdir -p /mydata/local/anngraphs/bigann/100M
+sudo mkdir -p /mydata/local/anngraphs/bigann/1B
+sudo mkdir -p /mydata/local/anngraphs/deep1b/100M
+sudo mkdir -p /mydata/local/anngraphs/deep1b/1B
 
 #+END_SRC
 
@@ -446,6 +446,20 @@ mkdir -p /mydata/local/anngraphs/deep1b/100M
 mkdir -p /mydata/local/anngraphs/deep1b/1B
 cd /mydata/local/anngraphs/bigann/1B/
 cp /nfs/anngraphs/bigann/1B/{base.1B.u8bin,vamana_64_128_1.2} .
+
+
+mkdir -p /mydata/local/anngraphs/bigann/100M/clusters_5/
+cp /nfs/anngraphs/bigann/100M/clusters_5/pipeann_100M_cluster0* /mydata/local/anngraphs/bigann/100M/clusters_5/
+
+mkdir -p /mydata/local/anngraphs/bigann/100M/global_partitions_5/
+cp /nfs/anngraphs/bigann/100M/{pipeann_100M_mem.index*,pipeann_100M_pq*} /mydata/local/anngraphs/bigann/100M/
+cp /nfs/anngraphs/bigann/100M/global_partitions_5/{pipeann_100M_partition_assignment.bin,pipeann_100M_partition0_ids_uint32.bin} /mydata/local/anngraphs/bigann/100M/global_partitions_5/
+cp /nfs/anngraphs/bigann/100M/global_partitions_5/{pipeann_100M_partition_assignment.bin,pipeann_100M_partition0_ids_uint32.bin} /mydata/local/anngraphs/bigann/100M/
+
+
+cp /nfs/anngraphs/bigann/100M/global_partitions_5/{pipeann_100M_partition0.bin,pipeann_100M_partition0_graph} /mydata/local/anngraphs/bigann/100M/global_partitions_5/
+
+
 
 
 

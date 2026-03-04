@@ -148,6 +148,26 @@ template <typename T> void StateSendClient<T>::ClientThread::main_loop() {
           parent->communicator->send_to_peer(distances[pid].second, r);
         }
       }
+    } else if (parent->dist_search_mode == DistributedSearchMode::DISTRIBUTED_ANN) {
+      // send to last other_peer_id which is the orchestration server
+      size_t region_size =
+          sizeof(MessageType::QUERIES) +
+          QueryEmbedding<T>::get_serialize_size_queries(batch_of_queries);
+
+      Region *r;
+      parent->prealloc_region_queue.dequeue_exact(1, &r);
+
+      r->length = region_size;
+      size_t offset = 0;
+      std::memcpy(r->addr, &msg_type, sizeof(msg_type));
+      offset += sizeof(msg_type);
+
+      QueryEmbedding<T>::write_serialize_queries(r->addr + offset,
+                                                 batch_of_queries);
+      uint32_t server_peer_id =
+        parent->other_peer_ids[parent->other_peer_ids.size() - 1];
+      parent->communicator->send_to_peer(parent->other_peer_ids[server_peer_id],
+                                         r);
     }
   }
 }
@@ -241,12 +261,8 @@ StateSendClient<T>::StateSendClient(
 
 template <typename T> void StateSendClient<T>::start() {
   communicator->start_recv_thread();
-  if (dist_search_mode == DistributedSearchMode::DISTRIBUTED_ANN) {
-    throw std::runtime_error("distributedann yet to be implemented");
-  } else {
-    for (auto &client_thread : client_threads) {
-      client_thread->start();
-    }
+  for (auto &client_thread : client_threads) {
+    client_thread->start();
   }
   result_thread->start();
 }

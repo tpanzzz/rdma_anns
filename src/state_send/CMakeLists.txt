@@ -19,6 +19,7 @@ set (CPP_FILES
   math_utils.cpp
   disk_utils.cpp
   distributedann_impl.cpp
+  distributedann_orchestration_thread.cpp
 )
 
 

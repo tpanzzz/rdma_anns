@@ -32,7 +32,6 @@ int main(int argc, char **argv) {
     LOG(INFO) << "num pts" << num_pts;
     write_graph_file_from_parlayann_graph_file(source_graph_file, ids,
                                                output_partition_graph_file);
-
   }
   return 0;
 }

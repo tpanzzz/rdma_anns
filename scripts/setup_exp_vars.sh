@@ -13,7 +13,7 @@ SERVER_STARTING_ADDRESS="10.10.1.1"
 BASE_PORT=8000
 
 
-if [ $# -lt 19 ]; then
+if [ $# -lt 21 ]; then
     echo "Usage: ${BASH_SOURCE[0]} <master_log_folder_name> <num_servers> <dataset_name> <dataset_size> <dist_search_mode> <mode> <num_search_thread> <max_batch_size> <overlap>"
     echo "  master_log_folder_name: example : testing"
     echo "  dataset_name: bigann"
@@ -41,7 +41,7 @@ DATASET_NAME=$3
 DATASET_SIZE=$4
 DIST_SEARCH_MODE=$5
 MODE=$6
-NUM_SEARCH_THREADS=$7
+NUM_SEARCH_THREADS=$7 
 MAX_BATCH_SIZE=$8
 OVERLAP=$9
 BEAM_WIDTH=${10}
@@ -54,7 +54,9 @@ NUM_QUERIES_TO_SEND=${16}
 MEM_L=${17}
 K_VALUE=${18}
 TOP_N=${19}
-shift 19
+NUM_ORCHESTRATION_THREADS=${20}
+NUM_SCORING_THREADS=${21}
+shift 21
 LVEC=$(printf " %s" "$@")
 LVEC=${LVEC:1}
 
@@ -163,10 +165,7 @@ else
     GRAPH_PREFIX="${ANNGRAHPS_PREFIX}/${DATASET_NAME}/${DATASET_SIZE}/${PREFIX}_${NUM_SERVERS}/${GRAPH_SUFFIX}"
 fi
 
-# --- Query and truthset paths ---
-
 MEDOID_FILE="${ANNGRAHPS_PREFIX}/${DATASET_NAME}/${DATASET_SIZE}/medoids.bin"
-DISTRIBUTEDANN_CLIENT_PARTITION_ASSIGNMENT_FILE="${ANNGRAHPS_PREFIX}/${DATASET_NAME}/${DATASET_SIZE}/${PREFIX}_${NUM_SERVERS}/${GRAPH_SUFFIX}_assignment.bin"
 
 
 # --- User configuration ---
@@ -205,6 +204,7 @@ if [[ "$MODE" == "distributed" ]]; then
     SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
     source ${SCRIPT_DIR}/cloudlab_addresses.sh
 
+
     # Only take NUM_SERVERS + 1 hosts (servers + client)
     NEEDED_HOSTS=$((NUM_SERVERS))
     
@@ -241,7 +241,7 @@ EXPERIMENT_NAME=${DIST_SEARCH_MODE}_${MODE}_${DATASET_NAME}_${DATASET_SIZE}_${NU
 # --- Export variables ---
 
 
-export NUM_SEARCH_THREADS USE_MEM_INDEX NUM_QUERIES_BALANCE USE_BATCHING MAX_BATCH_SIZE USE_COUNTER_THREAD COUNTER_SLEEP_MS 
+export NUM_SEARCH_THREADS NUM_ORCHESTRATION_THREADS NUM_SCORING_THREADS USE_MEM_INDEX NUM_QUERIES_BALANCE USE_BATCHING MAX_BATCH_SIZE USE_COUNTER_THREAD COUNTER_SLEEP_MS 
 export NUM_CLIENT_THREADS LVEC BEAM_WIDTH K_VALUE MEM_L RECORD_STATS SEND_RATE WRITE_QUERY_CSV NUM_QUERIES_TO_SEND TOP_N MEDOID_FILE
 export NUM_SERVERS DATASET_NAME DATASET_SIZE DATA_TYPE DIMENSION METRIC DIST_SEARCH_MODE MODE
 export ANNGRAHPS_PREFIX GRAPH_PREFIX QUERY_BIN TRUTHSET_BIN

@@ -71,7 +71,7 @@ void SSDPartitionIndex<T, TagT>::SearchThread::process_state(
     uint64_t recipient_peer_id = parent->state_top_cand_random_partition(state);
     state->should_send_emb =
         parent->state_should_send_emb(state, recipient_peer_id);
-    parent->send_state(state);
+    parent->send_state(state, recipient_peer_id);
   } else {
     throw std::runtime_error("SearchExecutionState is not handled currently");
   }
@@ -112,13 +112,6 @@ void SSDPartitionIndex<T, TagT>::SearchThread::main_loop_batch() {
           allocated_states[i]->query_emb =
               parent->query_emb_map.find(allocated_states[i]->query_id);
         }
-
-        // for (size_t j = 0; j < parent->data_dim; j++) {
-        //   std::cout << j << "," << std::fixed << std::setprecision(9)
-        //   << allocated_states[i]->query_emb->query[j] << " ";
-        // }
-        // std::cout << std::endl;
-
         if (!allocated_states[i]->query_emb->normalized) {
           // LOG(INFO) << "NOT NORMALIZED";
           if (parent->metric == pipeann::Metric::COSINE ||
@@ -219,7 +212,7 @@ void SSDPartitionIndex<T, TagT>::SearchThread::main_loop_batch() {
             allocated_states[i]->should_send_emb =
                 parent->state_should_send_emb(allocated_states[i],
                                               recipient_peer_id);
-            parent->send_state(allocated_states[i]);
+            parent->send_state(allocated_states[i], recipient_peer_id);
             // send state will delete the state later
             number_concurrent_queries--;
             number_own_states--;

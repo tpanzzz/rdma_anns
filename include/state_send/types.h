@@ -349,9 +349,11 @@ struct search_result_t {
   std::vector<uint32_t> partition_history_hop_idx;
   std::shared_ptr<QueryStats> stats = nullptr;
   void *hint; // currently only used by distributedann, stores pointer to an
-              // io_request which has a pointer to the state used by
+  // io_request which has a pointer to the state used by
   // orchestration thread. If we have multiple orchestration thread, how to you
   // place it into the correct thread then?
+  // 
+  
 
   // used for state_send_client_gather, the number of results to expect = size
   // of partition history?
