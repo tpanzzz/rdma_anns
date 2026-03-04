@@ -301,12 +301,12 @@ int search_disk_index(uint64_t num_client_thread, uint64_t dim,
     }
   };
 
-  // LOG(INFO) << "Use two ANNS for warming up...";
-  // uint32_t prev_L = Lvec[0];
-  // Lvec[0] = 50;
-  // run_tests(0, false);
-  // Lvec[0] = prev_L;
-  // LOG(INFO) << "Warming up finished.";
+  LOG(INFO) << "Use two ANNS for warming up...";
+  uint32_t prev_L = Lvec[0];
+  Lvec[0] = 50;
+  run_tests(0, false);
+  Lvec[0] = prev_L;
+  LOG(INFO) << "Warming up finished.";
 
   std::cout.setf(std::ios_base::fixed, std::ios_base::floatfield);
   std::cout.precision(2);
