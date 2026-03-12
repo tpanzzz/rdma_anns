@@ -6,6 +6,10 @@
 
 set -euo pipefail
 
+SOURCED=0
+(return 0 2>/dev/null) && SOURCED=1
+
+
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 source ${SCRIPT_DIR}/common_vars.sh
@@ -268,3 +272,10 @@ $SCRIPT_DIR/create_state_send_index.sh \
 
 
 
+if [[ $SOURCED -eq 1 ]]; then
+    export SCATTER_GATHER_OUTPUT STATE_SEND_OUTPUT  PARTITION_BASE_FILE_FOLDER SCATTER_GATHER_GRAPH_FOLDER STATE_SEND_GRAPH_FOLDER
+    export PQ_COMPRESSED_PATH PQ_PIVOT_PATH MEM_INDEX_PATH
+
+fi
+
+    
