@@ -13,7 +13,7 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 source ${SCRIPT_DIR}/common_vars.sh
 
 
-if [[ $# -ne 9 ]]; then
+if [[ $# -ne 10 ]]; then
     echo "Usage: <data_type> <metric> <partition_id_file> <base_file> <R> <L> <data_folder> <num_partitions> <mode>"
     exit 1
 fi
@@ -25,10 +25,11 @@ PARTITION_ID_FILE=$3
 BASE_FILE=$4
 R=$5
 L=$6
+ALPHA=$7
 # used to store all these different files. Store the big graph file at base of data_folder, partition graph folders in DATA_FOLDER/graph_files/global_partitions_{num_partitions}/... or DATA_FOLDER/graph_files/clusters_{num_partitions}/... 
-DATA_FOLDER=$7
-NUM_PARTITIONS=$8
-MODE=$9
+DATA_FOLDER=$8
+NUM_PARTITIONS=$9
+MODE=${10}
 
 
 
@@ -110,13 +111,6 @@ if [[ ! -d $PARTITION_SCATTER_GATHER_GRAPH_FOLDER ]]; then
     mkdir $PARTITION_SCATTER_GATHER_GRAPH_FOLDER
 fi
 
-
-if [[ "$MODE" == "local" ]]; then
-    ALPHA=1.0
-else
-    ALPHA=1.2
-fi
-   
 
 GLOBAL_PARLAYANN_GRAPH=$DATA_FOLDER/vamana_${R}_${L}_${ALPHA}
 if [[ ! -f $GLOBAL_PARLAYANN_GRAPH ]]; then

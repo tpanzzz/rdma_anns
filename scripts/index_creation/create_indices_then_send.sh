@@ -14,6 +14,7 @@ DATASET_NAME=text2image1B
 DATASET_SIZE=100M
 METRIC=mips
 MODE="distributed"
+ALPHA=1.0
 
 PARTITION_IDS_PREFIX=$1
 NUM_SERVERS=$2
@@ -44,6 +45,7 @@ for ((i=0; i<$NUM_SERVERS; i++)); do
          $BASE_FILE \
          64 \
          128 \
+	 $ALPHA \
          $DATA_FOLDER \
          $NUM_SERVERS \
          $MODE
