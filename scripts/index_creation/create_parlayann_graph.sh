@@ -15,7 +15,7 @@ DIST_FN=$4
 BASE_FILE=$5
 GRAPH_FILE=$6
 
-if [[ $DATA_FN == "mips" ]]; then
+if [[ $DIST_FN == "mips" ]]; then
     ALPHA=1.0
 else
     ALPHA=1.2

@@ -2,6 +2,9 @@
 
 # this file calls create_indices_v2 for all specified partitions then syncs them to Cloudlab
 
+
+# sameple on fern: ./scripts/index_creation/create_indices_then_send.sh /ssd1/anndata/text2image1B/100M/global_partitions_5/pipeann_100M_partition 5 /ssd1/anndata/text2image1B/100M/base.1B.fbin.crop_nb_100000000 /ssd1/anndata/text2image1B/100M/100M_vamana_64_120_1.0 /ssd1/anndata/text2image1B/100M/ /ssd1/anndata/text2image1B/100M/pipeann_100M 64 128
+
 set -euo pipefail
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
