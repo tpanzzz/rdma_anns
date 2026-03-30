@@ -36,6 +36,13 @@ MODE=${10}
 
 [[ "$MODE" != "local" && "$MODE" != "distributed" ]] && { echo "Error: mode must be local or distributed"; exit 1; }
 [[ "$METRIC" != "l2" && "$METRIC" != "mips" ]] && { echo "Error: metric must be l2 or mips"; exit 1; }
+
+if [[ "$METRIC" == "l2" ]]; then
+    PARLAYANN_DIST_FUNC="Euclidian"
+else
+    PARLAYANN_DIST_FUNC="mips"
+fi
+
 if [[ $MODE == "local" ]]; then
     RAM_BUDGET=32
 else 
@@ -115,7 +122,7 @@ fi
 GLOBAL_PARLAYANN_GRAPH=$DATA_FOLDER/vamana_${R}_${L}_${ALPHA}
 if [[ ! -f $GLOBAL_PARLAYANN_GRAPH ]]; then
     echo "Creating the global grpah file here: $GLOBAL_PARLAYANN_GRAPH" 
-    $WORKDIR/extern/ParlayANN/algorithms/vamana/neighbors -R $R -L $L -alpha $ALPHA -two_pass 0 -graph_outfile $GLOBAL_PARLAYANN_GRAPH -data_type $DATA_TYPE -dist_func $METRIC -base_path $BASE_FILE
+    $WORKDIR/extern/ParlayANN/algorithms/vamana/neighbors -R $R -L $L -alpha $ALPHA -two_pass 0 -graph_outfile $GLOBAL_PARLAYANN_GRAPH -data_type $DATA_TYPE -dist_func $PARLAYANN_DIST_FUNC -base_path $BASE_FILE
 fi
 
 
@@ -147,7 +154,7 @@ fi
 
 PARTITION_SCATTER_GATHER_GRAPH_FILE=$PARTITION_GRAPH_BASE_FOLDER/clusters_${NUM_PARTITIONS}/pipeann_${DATASET_SIZE}_partition${PARTITION_NUM}_graph
 if [[ ! -f $PARTITION_SCATTER_GATHER_GRAPH_FILE ]]; then
-    $WORKDIR/extern/ParlayANN/algorithms/vamana/neighbors -R $R -L $L -alpha $ALPHA -two_pass 0 -graph_outfile "${PARTITION_SCATTER_GATHER_GRAPH_FILE}_parlayann" -data_type $DATA_TYPE -dist_func $METRIC -base_path $PARTITION_SCATTER_GATHER_BASE_FILE
+    $WORKDIR/extern/ParlayANN/algorithms/vamana/neighbors -R $R -L $L -alpha $ALPHA -two_pass 0 -graph_outfile "${PARTITION_SCATTER_GATHER_GRAPH_FILE}_parlayann" -data_type $DATA_TYPE -dist_func $PARLAYANN_DIST_FUNC -base_path $PARTITION_SCATTER_GATHER_BASE_FILE
 
     "${WORKDIR}/build/src/state_send/convert_parlayann_graph_file" \
 	"${PARTITION_SCATTER_GATHER_GRAPH_FILE}_parlayann" \
